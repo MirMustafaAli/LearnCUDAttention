@@ -42,7 +42,7 @@ def multiply_3d_multihead(MatrixA, MatrixB, B, T, C, H):
 
 lib = ctypes.CDLL("./3dmultiply.so")
 
-lib.multiply_3d_multihead.argtypes = [
+lib.multihead_dot_product.argtypes = [
     ctypes.POINTER(ctypes.c_float), # MatrixA
     ctypes.POINTER(ctypes.c_float), # MatrixB
     ctypes.POINTER(ctypes.c_float), # Out
@@ -52,8 +52,18 @@ lib.multiply_3d_multihead.argtypes = [
     ctypes.c_int # H
 ]
 
-lib.multiply_3d_multihead.restype = None
+lib.multiply_attention_together.argtypes = [
+    ctypes.POINTER(ctypes.c_float), # MatrixA
+    ctypes.POINTER(ctypes.c_float), # MatrixB
+    ctypes.POINTER(ctypes.c_float), # Out
+    ctypes.c_int, # B
+    ctypes.c_int, # T 
+    ctypes.c_int, # C
+    ctypes.c_int # H
+]
 
+lib.multiply_attention_together.restype = None
+lib.multihead_dot_product.restype = None
 
 
 # Example usage:
@@ -63,21 +73,33 @@ num_heads = 2
 # Randomly initialize matrices
 Matrix_A = np.ones((B, T, C), dtype=np.float32)
 Matrix_B = np.ones((B, T, C), dtype=np.float32)
+Matrix_C = np.ones((B, T, C), dtype=np.float32)
 
 
 # Perform multihead matrix multiplication
-np_output = multiply_3d_multihead(Matrix_A, Matrix_B, B, T, C, num_heads)
-out = np.zeros(np_output.shape, dtype=np.float32)
+np_attn = multiply_3d_multihead(Matrix_A, Matrix_B, B, T, C, num_heads)
+attn = np.zeros(np_attn.shape, dtype=np.float32)
 
-lib.multiply_3d_multihead(
+lib.multihead_dot_product(
     Matrix_A.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
     Matrix_B.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
-    out.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+    attn.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
     B, T, C, num_heads)
+
+# np_attn = multiply_3d_multihead(Matrix_A, Matrix_B, B, T, C, num_heads)
+output = np.zeros((B, T, C), dtype=np.float32)
+
+lib.multiply_attention_together(
+    attn.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+    Matrix_C.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+    output.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+    B, T, C, num_heads
+)
 
 print(f"Batch = {B}, Time steps = {T}, Channels = {C}, Heads = {num_heads}")
 print(f"shape of input matrix = {Matrix_A.shape}")
-print(f"shape of output matrix = {np_output.shape}")
-print("Output using NumPy:\n", np_output)
-print("Output using C:\n", out)
-print("Are they close = ", np.allclose(np_output, out))
+print(f"shape of output matrix = {np_attn.shape}")
+print("Output using NumPy:\n", np_attn)
+print("Output using C:\n", attn)
+print("Are they close = ", np.allclose(np_attn, attn))
+print("Output after using Attention together:\n", output, "\n", output.shape)
